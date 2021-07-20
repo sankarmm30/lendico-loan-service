@@ -8,13 +8,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
-import javax.validation.constraints.NotBlank;
 
 /**
  * @author Sankar M <sankar.mm30@gmail.com>
  */
+@RestController("loanController")
 public class LoanController {
 
     private LoanService loanService;
@@ -25,8 +26,8 @@ public class LoanController {
     }
 
     @PostMapping(value = "/generate-plan", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<GeneratePlanResponseDto> recordEvent(
-            final @Valid @NotBlank(message = "Keyword cannot be null or empty") @RequestBody GeneratePlanRequestDto generatePlanRequestDto) {
+    public ResponseEntity<GeneratePlanResponseDto> generatePlan(
+            final @Valid @RequestBody GeneratePlanRequestDto generatePlanRequestDto) {
 
         return new ResponseEntity<>(this.loanService.generatePlan(generatePlanRequestDto), HttpStatus.OK);
     }

@@ -18,7 +18,7 @@ import java.util.Date;
 @NoArgsConstructor
 public class GeneratePlanRequestDto {
 
-    private Long loanAmount;
+    private Double loanAmount;
     private Double nominalRate;
     private Integer duration;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = GlobalConstant.DATE_TIME_FORMAT)
