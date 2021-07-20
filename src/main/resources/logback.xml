@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<configuration>
+
+    <!--Stop output INTO at start-->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+
+    <!-- definition of appender STDOUT -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
+    </appender>
+
+    <logger name="ch.qos.logback" level="error"/>
+
+    <logger name="org.springframework" level="warn"/>
+    <logger name="org.hibernate.validator" level="warn"/>
+
+    <logger name="org.springframework.web.filter.CommonsRequestLoggingFilter" level="debug"/>
+
+    <root level="INFO">
+        <!-- appender referenced after it is defined -->
+        <appender-ref ref="STDOUT"/>
+    </root>
+
+</configuration>
