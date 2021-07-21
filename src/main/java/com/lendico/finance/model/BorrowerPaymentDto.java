@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
 /**
  * @author Sankar M <sankar.mm30@gmail.com>
@@ -20,7 +20,7 @@ public class BorrowerPaymentDto {
 
     private Double borrowerPaymentAmount;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = GlobalConstant.DATE_TIME_FORMAT)
-    private Date date;
+    private LocalDateTime date;
     private Double initialOutstandingPrincipal;
     private Double interest;
     private Double principal;

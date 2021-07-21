@@ -1,15 +1,18 @@
 package com.lendico.finance.service.impl;
 
-import com.lendico.finance.constant.GlobalConstant;
+import com.lendico.finance.exception.GenericClientRuntimeException;
+import com.lendico.finance.exception.GenericServerRuntimeException;
+import com.lendico.finance.factory.ValidationFactoryServiceImpl;
 import com.lendico.finance.model.BorrowerPaymentDto;
 import com.lendico.finance.model.GeneratePlanRequestDto;
 import com.lendico.finance.model.GeneratePlanResponseDto;
 import com.lendico.finance.service.LoanService;
-import org.decimal4j.util.DoubleRounder;
+import com.lendico.finance.util.CommonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Date;
+import javax.validation.ConstraintViolationException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -24,38 +27,98 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
 
     private static final Integer NO_OF_MONTH_IN_YEAR = 12;
 
+    private AtomicReference<Double> initialOutstandingPrincipal;
+    private AtomicReference<Double> interest;
+    private AtomicReference<Double> principal;
+    private AtomicReference<Double> remainingOutstandingPrincipal;
+    private AtomicReference<LocalDateTime> startDate;
+
+    private ValidationFactoryServiceImpl validationFactoryService;
+
+    public AbstractDefaultLoanServiceImpl(ValidationFactoryServiceImpl validationFactoryService) {
+
+        this.validationFactoryService = validationFactoryService;
+    }
+
     @Override
-    public GeneratePlanResponseDto generatePlan(GeneratePlanRequestDto generatePlanRequestDto) {
+    public GeneratePlanResponseDto generatePlan(final GeneratePlanRequestDto generatePlanRequestDto) {
 
-        Double annualInterest = generatePlanRequestDto.getNominalRate() / 100;
+        try {
 
-        Double annuity = calculateAnnuity(generatePlanRequestDto.getLoanAmount(),
-                ((generatePlanRequestDto.getNominalRate() / 100) / NO_OF_MONTH_IN_YEAR),
-                generatePlanRequestDto.getDuration());
+            // Validating the input parameter
+            this.validationFactoryService.validObject(generatePlanRequestDto);
 
-        LOG.info("Calculated Annuity: {}", annuity);
+            // Calculating annual interest from Nominal Rate
+            Double annualInterest = generatePlanRequestDto.getNominalRate() / 100;
 
-        AtomicReference<Double> initialOutstandingPrincipal = new AtomicReference<>(0.0);
-        AtomicReference<Double> interest = new AtomicReference<>(0.0);
-        AtomicReference<Double> principal = new AtomicReference<>(0.0);
-        AtomicReference<Double> remainingOutstandingPrincipal = new AtomicReference<>(0.0);
+            // Calculating annuity
+            Double annuity = this.calculateAnnuity(generatePlanRequestDto.getLoanAmount(),
+                    ((generatePlanRequestDto.getNominalRate() / 100) / NO_OF_MONTH_IN_YEAR),
+                    generatePlanRequestDto.getDuration());
 
-        List<BorrowerPaymentDto> borrowerPayments =
-                IntStream.range(0, generatePlanRequestDto.getDuration())
+            if(annuity.equals(0.0)) {
+
+                throw new GenericClientRuntimeException("Annuity calculated as zero. There is no plan available for the given input");
+            }
+
+            LOG.info("Calculated annuity: {}", annuity);
+
+            return GeneratePlanResponseDto
+                    .builder()
+                    .borrowerPayments(this.getBorrowerPaymentList(generatePlanRequestDto, annuity, annualInterest))
+                    .build();
+
+        } catch (GenericClientRuntimeException | ConstraintViolationException exception) {
+
+            throw exception;
+
+        } catch (Exception exception) {
+
+            LOG.error("Exception while generating pre-calculated plan",exception);
+
+            throw new GenericServerRuntimeException("Unexpected error occurred", exception);
+        }
+    }
+
+    /**
+     * This method is in charge of building the Borrower payment list
+     *
+     * @param generatePlanRequestDto
+     * @param annuity
+     * @param annualInterest
+     * @return
+     */
+    private List<BorrowerPaymentDto> getBorrowerPaymentList(final GeneratePlanRequestDto generatePlanRequestDto,
+                                                            final Double annuity, final Double annualInterest) {
+
+        // Initializing the response parameters
+
+        initialOutstandingPrincipal = new AtomicReference<>(0.0);
+        interest = new AtomicReference<>(0.0);
+        principal = new AtomicReference<>(0.0);
+        remainingOutstandingPrincipal = new AtomicReference<>(0.0);
+        startDate = new AtomicReference<>(generatePlanRequestDto.getStartDate());
+
+        // Building Borrower Payment List
+
+        return IntStream.range(0, generatePlanRequestDto.getDuration())
                         .mapToObj(e -> {
 
                             if(initialOutstandingPrincipal.get().equals(0.0)) {
 
                                 initialOutstandingPrincipal.set(generatePlanRequestDto.getLoanAmount());
+
                             } else {
 
                                 initialOutstandingPrincipal.set(remainingOutstandingPrincipal.get());
+
+                                startDate.set(CommonUtil.addMonth(startDate.get(), 1,
+                                        generatePlanRequestDto.getStartDate().getDayOfMonth()));
                             }
 
                             interest.set(this.calculateInterest(annualInterest, initialOutstandingPrincipal.get()));
                             principal.set(this.calculatePrincipal(annuity, interest.get()));
-                            remainingOutstandingPrincipal.set(DoubleRounder.round(initialOutstandingPrincipal.get() - principal.get(),
-                                    GlobalConstant.NO_OF_PRECISION));
+                            remainingOutstandingPrincipal.set(CommonUtil.round(initialOutstandingPrincipal.get() - principal.get()));
 
                             if(principal.get() > initialOutstandingPrincipal.get()) {
 
@@ -64,9 +127,9 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
 
                             return BorrowerPaymentDto.builder()
                                     .borrowerPaymentAmount(
-                                            annuity > DoubleRounder.round(principal.get() + interest.get(), 2) ?
-                                                    DoubleRounder.round(principal.get() + interest.get(), 2) : annuity)
-                                    .date(new Date())
+                                            annuity > CommonUtil.round(principal.get() + interest.get()) ?
+                                                    CommonUtil.round(principal.get() + interest.get()) : annuity)
+                                    .date(startDate.get())
                                     .initialOutstandingPrincipal(initialOutstandingPrincipal.get())
                                     .interest(interest.get())
                                     .principal(principal.get())
@@ -75,11 +138,6 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
                                     .build();
                         })
                         .collect(Collectors.toList());
-
-        return GeneratePlanResponseDto
-                .builder()
-                .borrowerPayments(borrowerPayments)
-                .build();
     }
 
     protected abstract Double calculateAnnuity(final Double loanAmount, final Double monthlyInterestRate, final Integer duration);

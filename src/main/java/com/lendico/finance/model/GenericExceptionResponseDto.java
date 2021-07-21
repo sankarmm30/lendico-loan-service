@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -20,7 +20,7 @@ import java.util.List;
 public class GenericExceptionResponseDto {
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = GlobalConstant.DATE_TIME_FORMAT)
-    private Date timestamp;
+    private LocalDateTime timestamp;
 
     private Integer status;
     private String message;
