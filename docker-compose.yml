@@ -1,0 +1,13 @@
+version: '3'
+services:
+  statistical-data-analyser:
+    image: lendico/lendico-loan-service:1.0.0
+    container_name: lendico-loan-service
+    ports:
+      - 8080:8080
+    networks:
+      - local_default
+
+networks:
+  local_default:
+    external: true
