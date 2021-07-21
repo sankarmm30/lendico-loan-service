@@ -25,6 +25,12 @@ public class LoanController {
         this.loanService = loanService;
     }
 
+    /**
+     * This post method generates the pre-calculated repayment loan plan with the details provided.
+     *
+     * @param generatePlanRequestDto
+     * @return
+     */
     @PostMapping(value = "/generate-plan", produces = MediaType.APPLICATION_JSON_VALUE, consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<GeneratePlanResponseDto> generatePlan(
             final @Valid @RequestBody GeneratePlanRequestDto generatePlanRequestDto) {
