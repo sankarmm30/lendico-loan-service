@@ -26,6 +26,7 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractDefaultLoanServiceImpl.class);
 
     private static final Integer NO_OF_MONTH_IN_YEAR = 12;
+    private static final Double ZERO = 0.0;
 
     private AtomicReference<Double> initialOutstandingPrincipal;
     private AtomicReference<Double> interest;
@@ -51,7 +52,7 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
 
         try {
 
-            // Validating the input parameter
+            // Validating the input parameter. It will throw ConstraintViolationException when any parameter is invalid
             this.validationFactoryService.validObject(generatePlanRequestDto);
 
             // Calculating annual & monthly interest from Nominal Rate
@@ -63,7 +64,7 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
             Double annuity = this.calculateAnnuity(generatePlanRequestDto.getLoanAmount(),
                     monthlyInterest, generatePlanRequestDto.getDuration());
 
-            if(annuity.equals(0.0)) {
+            if(CommonUtil.round(annuity).equals(ZERO)) {
 
                 throw new GenericClientRuntimeException("Annuity calculated as zero. There is no plan available for the given input");
             }
@@ -100,10 +101,10 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
 
         // Initializing the response parameters
 
-        this.initialOutstandingPrincipal = new AtomicReference<>(0.0);
-        this.interest = new AtomicReference<>(0.0);
-        this.principal = new AtomicReference<>(0.0);
-        this.remainingOutstandingPrincipal = new AtomicReference<>(0.0);
+        this.initialOutstandingPrincipal = new AtomicReference<>(ZERO);
+        this.interest = new AtomicReference<>(ZERO);
+        this.principal = new AtomicReference<>(ZERO);
+        this.remainingOutstandingPrincipal = new AtomicReference<>(ZERO);
         this.paymentDate = new AtomicReference<>(generatePlanRequestDto.getStartDate());
 
         // Building Borrower Payment List
