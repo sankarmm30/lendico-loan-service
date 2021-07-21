@@ -54,6 +54,9 @@
                 "path": "/generate-plan"
             }
         ```        
+#### Project Demo
+
+![](doc/LendicoLoanServiceDemo.gif)
 
 #### Setup Local Environment
 
