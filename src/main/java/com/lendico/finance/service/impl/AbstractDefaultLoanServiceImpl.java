@@ -31,7 +31,7 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
     private AtomicReference<Double> interest;
     private AtomicReference<Double> principal;
     private AtomicReference<Double> remainingOutstandingPrincipal;
-    private AtomicReference<LocalDateTime> startDate;
+    private AtomicReference<LocalDateTime> paymentDate;
 
     private ValidationFactoryServiceImpl validationFactoryService;
 
@@ -40,6 +40,12 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
         this.validationFactoryService = validationFactoryService;
     }
 
+    /**
+     * This method in charge of generating the pre-calculated loan repayment plans for the given input
+     *
+     * @param generatePlanRequestDto
+     * @return
+     */
     @Override
     public GeneratePlanResponseDto generatePlan(final GeneratePlanRequestDto generatePlanRequestDto) {
 
@@ -48,20 +54,21 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
             // Validating the input parameter
             this.validationFactoryService.validObject(generatePlanRequestDto);
 
-            // Calculating annual interest from Nominal Rate
+            // Calculating annual & monthly interest from Nominal Rate
             Double annualInterest = generatePlanRequestDto.getNominalRate() / 100;
+
+            Double monthlyInterest = annualInterest / NO_OF_MONTH_IN_YEAR;
 
             // Calculating annuity
             Double annuity = this.calculateAnnuity(generatePlanRequestDto.getLoanAmount(),
-                    ((generatePlanRequestDto.getNominalRate() / 100) / NO_OF_MONTH_IN_YEAR),
-                    generatePlanRequestDto.getDuration());
+                    monthlyInterest, generatePlanRequestDto.getDuration());
 
             if(annuity.equals(0.0)) {
 
                 throw new GenericClientRuntimeException("Annuity calculated as zero. There is no plan available for the given input");
             }
 
-            LOG.info("Calculated annuity: {}", annuity);
+            LOG.debug("Calculated annuity: {}", annuity);
 
             return GeneratePlanResponseDto
                     .builder()
@@ -93,56 +100,94 @@ public abstract class AbstractDefaultLoanServiceImpl implements LoanService {
 
         // Initializing the response parameters
 
-        initialOutstandingPrincipal = new AtomicReference<>(0.0);
-        interest = new AtomicReference<>(0.0);
-        principal = new AtomicReference<>(0.0);
-        remainingOutstandingPrincipal = new AtomicReference<>(0.0);
-        startDate = new AtomicReference<>(generatePlanRequestDto.getStartDate());
+        this.initialOutstandingPrincipal = new AtomicReference<>(0.0);
+        this.interest = new AtomicReference<>(0.0);
+        this.principal = new AtomicReference<>(0.0);
+        this.remainingOutstandingPrincipal = new AtomicReference<>(0.0);
+        this.paymentDate = new AtomicReference<>(generatePlanRequestDto.getStartDate());
 
         // Building Borrower Payment List
 
         return IntStream.range(0, generatePlanRequestDto.getDuration())
-                        .mapToObj(e -> {
+                        .mapToObj(payment -> {
 
-                            if(initialOutstandingPrincipal.get().equals(0.0)) {
+                            if(payment == 0) {
 
-                                initialOutstandingPrincipal.set(generatePlanRequestDto.getLoanAmount());
+                                // Setting the loan amount for the first payment
+
+                                this.initialOutstandingPrincipal.set(generatePlanRequestDto.getLoanAmount());
 
                             } else {
 
-                                initialOutstandingPrincipal.set(remainingOutstandingPrincipal.get());
+                                // Setting the remaining outstanding principal as initial outstanding principal
 
-                                startDate.set(CommonUtil.addMonth(startDate.get(), 1,
+                                this.initialOutstandingPrincipal.set(this.remainingOutstandingPrincipal.get());
+
+                                // Setting the payment by adding one month to the previous payment date
+
+                                this.paymentDate.set(CommonUtil.addMonth(this.paymentDate.get(), 1,
                                         generatePlanRequestDto.getStartDate().getDayOfMonth()));
                             }
 
-                            interest.set(this.calculateInterest(annualInterest, initialOutstandingPrincipal.get()));
-                            principal.set(this.calculatePrincipal(annuity, interest.get()));
-                            remainingOutstandingPrincipal.set(CommonUtil.round(initialOutstandingPrincipal.get() - principal.get()));
+                            this.interest.set(this.calculateInterest(annualInterest, this.initialOutstandingPrincipal.get()));
 
-                            if(principal.get() > initialOutstandingPrincipal.get()) {
+                            this.principal.set(this.calculatePrincipal(annuity, this.interest.get()));
 
-                                principal.set(initialOutstandingPrincipal.get());
-                            }
+                            // Calculating Remaining Outstanding Principal by subtracting principal from initial Outstanding Principal
+
+                            this.remainingOutstandingPrincipal.set(this.initialOutstandingPrincipal.get() - this.principal.get());
+
+                            // Applying round function in the final output
 
                             return BorrowerPaymentDto.builder()
-                                    .borrowerPaymentAmount(
-                                            annuity > CommonUtil.round(principal.get() + interest.get()) ?
-                                                    CommonUtil.round(principal.get() + interest.get()) : annuity)
-                                    .date(startDate.get())
-                                    .initialOutstandingPrincipal(initialOutstandingPrincipal.get())
-                                    .interest(interest.get())
-                                    .principal(principal.get())
-                                    .remainingOutstandingPrincipal(
-                                            remainingOutstandingPrincipal.get() < 0 ? 0.0 : remainingOutstandingPrincipal.get())
+                                    .borrowerPaymentAmount(CommonUtil.round(annuity))
+                                    .date(paymentDate.get())
+                                    .initialOutstandingPrincipal(CommonUtil.round(this.initialOutstandingPrincipal.get()))
+                                    .interest(CommonUtil.round(this.interest.get()))
+                                    .principal(CommonUtil.round(this.principal.get()))
+                                    .remainingOutstandingPrincipal(CommonUtil.round(this.remainingOutstandingPrincipal.get()))
                                     .build();
                         })
                         .collect(Collectors.toList());
     }
 
+    /**
+     * This method is charge of calculating the amount using the formula
+     *
+     * Annuity = (Loan Amount * Monthly interest rate) / (1 - (1 + Monthly interest rate) ^ - Duration)
+     *
+     * Ex: Annuity = (5000 * 0.0041) / (1 - (1 + 0.0041) ^ - 24) = 219.36
+     *
+     * @param loanAmount
+     * @param monthlyInterestRate
+     * @param duration
+     * @return
+     */
     protected abstract Double calculateAnnuity(final Double loanAmount, final Double monthlyInterestRate, final Integer duration);
 
+    /**
+     * This method is charge of calculating the interest using below formula
+     *
+     * Interest = (Rate * Days in Month * Initial Outstanding Principal) / Days in Year
+     *
+     * Ex. Interest = (0.05 * 30 * 5000.00) / 360 = 20.83 €
+     *
+     * @param annualInterestRate
+     * @param initialOutstandingPrincipal
+     * @return
+     */
     protected abstract Double calculateInterest(final Double annualInterestRate, final Double initialOutstandingPrincipal);
 
+    /**
+     * This method is charge of calculating the principal using below formula
+     *
+     * Principal = Annuity - Interest
+     *
+     * Ex. Principal = 219.36 - 20.83 = 198.53 €
+     *
+     * @param annuity
+     * @param interest
+     * @return
+     */
     protected abstract Double calculatePrincipal(final Double annuity, final Double interest);
 }

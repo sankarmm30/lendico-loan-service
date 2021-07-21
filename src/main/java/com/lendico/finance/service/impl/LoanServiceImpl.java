@@ -2,7 +2,6 @@ package com.lendico.finance.service.impl;
 
 import com.lendico.finance.factory.ValidationFactoryServiceImpl;
 import com.lendico.finance.service.LoanService;
-import com.lendico.finance.util.CommonUtil;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,23 +18,55 @@ public class LoanServiceImpl extends AbstractDefaultLoanServiceImpl implements L
         super(validationFactoryService);
     }
 
+    /**
+     * This method is charge of calculating the amount using the formula
+     *
+     * Annuity = (Loan Amount * Monthly interest rate) / (1 - (1 + Monthly interest rate) ^ - Duration)
+     *
+     * Ex: Annuity = (5000 * 0.0041) / (1 - (1 + 0.0041) ^ - 24) = 219.36
+     *
+     * @param loanAmount
+     * @param monthlyInterestRate
+     * @param duration
+     * @return
+     */
     @Override
     public Double calculateAnnuity(final Double loanAmount, final Double monthlyInterestRate, final Integer duration) {
 
-        return CommonUtil.round(
-                ((loanAmount * monthlyInterestRate) / (1 - Math.pow(1 + monthlyInterestRate, - duration))));
+        return ((loanAmount * monthlyInterestRate) / (1 - Math.pow(1 + monthlyInterestRate, - duration)));
     }
 
+    /**
+     * This method is charge of calculating the interest using below formula
+     *
+     * Interest = (Rate * Days in Month * Initial Outstanding Principal) / Days in Year
+     *
+     * Ex. Interest = (0.05 * 30 * 5000.00) / 360 = 20.83 €
+     *
+     * @param annualInterestRate
+     * @param initialOutstandingPrincipal
+     * @return
+     */
     @Override
     public Double calculateInterest(Double annualInterestRate, Double initialOutstandingPrincipal) {
 
-        return CommonUtil.round(
-                (annualInterestRate * NO_OF_DAYS_IN_MONTH * initialOutstandingPrincipal) / NO_OF_DAYS_IN_YEAR);
+        return (annualInterestRate * NO_OF_DAYS_IN_MONTH * initialOutstandingPrincipal) / NO_OF_DAYS_IN_YEAR;
     }
 
+    /**
+     * This method is charge of calculating the principal using below formula
+     *
+     * Principal = Annuity - Interest
+     *
+     * Ex. Principal = 219.36 - 20.83 = 198.53 €
+     *
+     * @param annuity
+     * @param interest
+     * @return
+     */
     @Override
     public Double calculatePrincipal(final Double annuity, final Double interest) {
 
-        return CommonUtil.round(annuity - interest);
+        return annuity - interest;
     }
 }
